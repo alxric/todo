@@ -25,10 +25,13 @@ import (
 
 // listCmd represents the list command
 var listCmd = &cobra.Command{
-	Use:   "list",
-	Short: "Lists all of your tasks",
+	Use:       "list",
+	Short:     "Lists all of your tasks",
+	Args:      cobra.OnlyValidArgs,
+	ValidArgs: []string{"open", "completed"},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		filter, err := cmd.Flags().GetString("filter")
+
 		if err != nil {
 			return fmt.Errorf("Invalid filter. Valid options are: [open, completed]")
 		}
@@ -36,7 +39,7 @@ var listCmd = &cobra.Command{
 		if filter != "open" && filter != "completed" && filter != "" {
 			return fmt.Errorf("Invalid filter. Valid options are: [open, completed]")
 		}
-		return list(filter)
+		return t.List(filter)
 	},
 }
 
@@ -46,7 +49,8 @@ func init() {
 
 }
 
-func list(filter string) error {
+// List tasks
+func (t *Todo) List(filter string) error {
 	table := tablewriter.NewWriter(os.Stdout)
 	table.SetHeader([]string{"#", "Done", "Task", "Created", "Completed", "URL"})
 	table.SetBorder(true)
@@ -58,8 +62,7 @@ func list(filter string) error {
 		tablewriter.Colors{tablewriter.Bold},
 		tablewriter.Colors{tablewriter.Bold},
 	)
-
-	for index, task := range cfg.Tasks {
+	for index, task := range t.Config.Tasks {
 		switch {
 		case filter == "open" && task.Done:
 			continue
@@ -75,15 +78,20 @@ func list(filter string) error {
 			done = " X "
 		}
 		if task.Completed.Unix() > 0 {
-			completed = task.Completed.Format("2006-01-04 15:04:05")
+			completed = task.Completed.Format("2006-01-02 15:04:05")
+		}
+		var jiraURL string
+		if task.JiraKey != "" {
+			jiraURL = fmt.Sprintf("%s/browse/%s", t.Config.Jira.URL, task.JiraKey)
 		}
 		row := []string{
+
 			fmt.Sprintf("%d", index+1),
 			done,
 			taskName,
 			task.Created.Format("2006-01-02 15:04:05"),
 			completed,
-			fmt.Sprintf("%s/browse/%s", cfg.Jira.URL, task.JiraKey),
+			jiraURL,
 		}
 		table.Append(row)
 	}

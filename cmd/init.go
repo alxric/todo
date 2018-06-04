@@ -39,7 +39,7 @@ against. Your credentials will not be stored anywhere. Only thing getting stored
 is an OAuth token which will then be used for any future authentications against
 Jira`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return initTodo()
+		return t.SetupJira()
 	},
 }
 
@@ -47,62 +47,57 @@ func init() {
 	rootCmd.AddCommand(initCmd)
 }
 
-var jiraURL, jiraUser, jiraPassword string
-
-func initTodo() error {
-	err := setupJira()
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-func setupJira() error {
-	j = jira.NewClient(&oauth1.Config{
+//SetupJira and generate a valid oauth token
+func (t *Todo) SetupJira() error {
+	t.JC = jira.NewClient(&oauth1.Config{
 		CallbackURL:    "oob",
 		ConsumerKey:    "Todo",
 		ConsumerSecret: "dont_care",
 		Endpoint:       oauth1.Endpoint{},
 		Signer: &oauth1.RSASigner{
-			PrivateKey: privateKey,
+			PrivateKey: t.PrivateKey,
 		},
 	})
-	j.PrivateKey = privateKey
+	t.JC.PrivateKey = t.PrivateKey
 	fmt.Printf("Initalizing todo...\n\n")
-	err := j.GenerateOauthToken()
+	err := t.JC.GenerateOauthToken()
 	if err != nil {
-		return err
+		return fmt.Errorf(`Unable to generate oauth token!
+Make sure you use the correct Jira URL and that you have set up the application link:
+%v`, err)
 	}
 	fmt.Printf("\nGreat! Authentication succesful! Let's proceed...\n")
 
-	p, err := chooseProject()
+	p, err := t.chooseProject()
 	if err != nil {
 		return fmt.Errorf("Unable to choose Jira project: %v", err)
 	}
 
-	s, backlog, err := chooseDoneStatus(p.Key)
+	s, backlog, issueType, err := t.chooseDoneStatus(p.Key)
 	if err != nil {
 		return fmt.Errorf("Unable to choose Jira project: %v", err)
 	}
-	token, err := config.Encrypt(&privateKey.PublicKey, j.Token)
+	token, err := config.Encrypt(&t.PrivateKey.PublicKey, t.JC.Token)
 	if err != nil {
 		return err
 	}
-	session, err := config.Encrypt(&privateKey.PublicKey, j.Session)
+	session, err := config.Encrypt(&t.PrivateKey.PublicKey, t.JC.Session)
 	if err != nil {
 		return err
 	}
-	cfg.Jira.URL = j.BaseURL
-	cfg.Jira.Token = token
-	cfg.Jira.Session = session
-	cfg.Jira.Project = config.Project{
+	t.Config = &config.Cfg{}
+	t.Config.Jira.URL = t.JC.BaseURL
+	t.Config.Jira.Token = token
+	t.Config.Jira.Session = session
+	t.Config.Jira.Project = config.Project{
 		Name:      p.Name,
 		DoneID:    s.ID,
 		BacklogID: backlog.ID,
 		ID:        p.ID,
+		IssueType: issueType,
 		Key:       p.Key,
 	}
-	err = config.Write(viper.ConfigFileUsed(), cfg)
+	err = config.Write(viper.ConfigFileUsed(), t.Config)
 	if err != nil {
 		return err
 	}
@@ -110,11 +105,11 @@ func setupJira() error {
 	return nil
 }
 
-func chooseProject() (*jira.Project, error) {
+func (t *Todo) chooseProject() (*jira.Project, error) {
 	var p jira.Project
 	for {
 		fmt.Printf("\nChoose which project you want Todo to use:\n\n")
-		projects, err := j.ListProjects()
+		projects, err := t.JC.ListProjects()
 		if err != nil {
 			return nil, err
 		}
@@ -146,19 +141,21 @@ func chooseProject() (*jira.Project, error) {
 	return &p, nil
 }
 
-func chooseDoneStatus(projectKey string) (*jira.Transition, *jira.Transition, error) {
+func (t *Todo) chooseDoneStatus(projectKey string) (*jira.Transition, *jira.Transition, string, error) {
+	var issueType string
 	var p, bl jira.Transition
 	for {
 		fmt.Printf("\nChoose which status you want to use when marking an issue as completed:\n\n")
 		searchJSON := []byte(fmt.Sprintf(
 			`{"jql":"project = %s", "startAt": 0, "maxResults": 1}`, projectKey))
-		si, err := j.SearchIssues(searchJSON)
+		si, err := t.JC.SearchIssues(searchJSON)
 		if err != nil || len(si) == 0 {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
-		transitions, err := j.ListTransitions(si[0].ID)
+		issueType = si[0].Fields.IssueType.ID
+		transitions, err := t.JC.ListTransitions(si[0].ID)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, "", err
 		}
 		for index, transition := range transitions {
 			if transition.Name == "Backlog" {
@@ -170,7 +167,7 @@ func chooseDoneStatus(projectKey string) (*jira.Transition, *jira.Transition, er
 		reader := bufio.NewReader(os.Stdin)
 		projectChoice, err := reader.ReadString('\n')
 		if err != nil {
-			return nil, nil, fmt.Errorf("Could not read input from picking a project status")
+			return nil, nil, "", fmt.Errorf("Could not read input from picking a project status")
 		}
 		pInt, err := strconv.Atoi(strings.TrimSpace(projectChoice))
 		if err != nil {
@@ -187,5 +184,5 @@ func chooseDoneStatus(projectKey string) (*jira.Transition, *jira.Transition, er
 		p = transitions[pInt-1]
 		break
 	}
-	return &p, &bl, nil
+	return &p, &bl, issueType, nil
 }

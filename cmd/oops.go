@@ -29,34 +29,35 @@ var oopsCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Short: "Re-opens an accidentally completed task",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return oops(args)
+		return t.Oops(args)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(oopsCmd)
-
 }
 
-func oops(args []string) error {
+// Oops will re-open a closed issue
+func (t *Todo) Oops(args []string) error {
 	var i int
 	var err error
-	if i, err = verifyIndex(args); err != nil {
+	if i, err = t.verifyIndex(args); err != nil {
 		return err
 	}
-	t := cfg.Tasks[i]
-	if t.Done == false {
-		return fmt.Errorf("Task '%s' is not completed", t.Text)
+	task := t.Config.Tasks[i]
+	if task.Done == false {
+		return fmt.Errorf("Task '%s' is not completed", task.Text)
 	}
-	fmt.Printf("Re-opening task: '%s'\n", t.Text)
-	err = j.ChangeIssueStatus(t.JiraID, cfg.Jira.Project.BacklogID, "Re-opened by Todo")
-	if err != nil {
-		return fmt.Errorf("Unable to change Jira status: %v", err)
+	fmt.Printf("Re-opening task: '%s'\n", task.Text)
+	if task.JiraID != "" {
+		err = t.JC.ChangeIssueStatus(task.JiraID, t.Config.Jira.Project.BacklogID, "Re-opened by Todo")
+		if err != nil {
+			return fmt.Errorf("Unable to change Jira status: %v", err)
+		}
 	}
-	t.Done = false
+	task.Done = false
 	var tt time.Time
-	t.Completed = tt
-	config.Write(viper.ConfigFileUsed(), &cfg)
-
+	task.Completed = tt
+	config.Write(viper.ConfigFileUsed(), &t.Config)
 	return nil
 }

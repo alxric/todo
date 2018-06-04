@@ -47,6 +47,10 @@ func (c *Client) generateAPIURL(path string, method string) (string, error) {
 	apiURL.WriteString(parsedURL.Scheme)
 	apiURL.WriteString("://")
 	apiURL.WriteString(parsedURL.Hostname())
+	if parsedURL.Port() != "" {
+		apiURL.WriteString(":")
+		apiURL.WriteString(parsedURL.Port())
+	}
 	apiURL.WriteString(parsedURL.EscapedPath())
 
 	apiURL.WriteString("?oauth_body_hash=")
@@ -68,6 +72,10 @@ func (c *Client) generateAPIURL(path string, method string) (string, error) {
 	signString.WriteString(parsedURL.Scheme)
 	signString.WriteString("://")
 	signString.WriteString(parsedURL.Hostname())
+	if parsedURL.Port() != "" {
+		signString.WriteString(":")
+		signString.WriteString(parsedURL.Port())
+	}
 	signString.WriteString(parsedURL.EscapedPath())
 	signString.WriteString("&oauth_body_hash=")
 	signString.WriteString("2jmj7l5rSw0yVb%252FvlWAYkK%252FYBwk%253D")

@@ -31,12 +31,17 @@ var addCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Adds a new task",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return add(strings.Join(args, " "))
+		offline, err := cmd.Flags().GetBool("offline")
+		if err != nil {
+			return fmt.Errorf("Invalid value for offline")
+		}
+		return t.Add(strings.Join(args, " "), offline)
 	},
 }
 
 func init() {
 	rootCmd.AddCommand(addCmd)
+	addCmd.Flags().BoolP("offline", "o", false, "Offline mode (Don't create JIRA task)")
 }
 
 type jiraReply struct {
@@ -45,28 +50,45 @@ type jiraReply struct {
 	Self string `json:"self"`
 }
 
-func add(text string) error {
-	if j.BaseURL == "" {
+// Add a new task
+func (t *Todo) Add(text string, offline bool) error {
+	if text == "" {
+		return fmt.Errorf("Your todo can't be empty")
+	}
+	if t.JC.BaseURL == "" {
 		return fmt.Errorf("Could not read configuration. Run 'todo init'")
 	}
-	t := &config.Task{
+	task := &config.Task{
 		Text:    text,
 		Done:    false,
 		Created: time.Now(),
 	}
-	issue := &jira.Issue{
-		Fields: jira.Fields{
-			Summary: fmt.Sprintf("TODO: %s", t.Text),
-			Project: jira.IssueProject{
-				ID: cfg.Jira.Project.ID,
+	if !offline {
+		issue := &jira.Issue{
+			Fields: jira.Fields{
+				Summary: fmt.Sprintf("TODO: %s", task.Text),
+				Project: jira.IssueProject{
+					ID: t.Config.Jira.Project.ID,
+				},
+				IssueType: jira.IssueType{
+					ID: t.Config.Jira.Project.IssueType,
+				},
 			},
-			IssueType: jira.IssueType{
-				ID: "10002",
-			},
-		},
+		}
+		err := t.createJira(issue, task)
+		if err != nil {
+			return fmt.Errorf("Unable to create Jira issue: %v", err)
+		}
 	}
 
-	b, err := j.CreateIssue(issue)
+	t.Config.Tasks = append(t.Config.Tasks, task)
+	config.Write(viper.ConfigFileUsed(), &t.Config)
+	fmt.Println(fmt.Sprintf("Task added: '%s'", task.Text))
+	return nil
+}
+
+func (t *Todo) createJira(issue *jira.Issue, task *config.Task) error {
+	b, err := t.JC.CreateIssue(issue)
 	if err != nil {
 		return fmt.Errorf("Unable to create Jira issue; %v", err)
 	}
@@ -75,10 +97,7 @@ func add(text string) error {
 	if err != nil {
 		return fmt.Errorf("Unable to unmarshal Jira reply: %v", err)
 	}
-	t.JiraID = jr.ID
-	t.JiraKey = jr.Key
-	cfg.Tasks = append(cfg.Tasks, t)
-	config.Write(viper.ConfigFileUsed(), &cfg)
-	fmt.Println(fmt.Sprintf("Task added: '%s'", t.Text))
+	task.JiraID = jr.ID
+	task.JiraKey = jr.Key
 	return nil
 }

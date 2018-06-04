@@ -28,6 +28,7 @@ type Project struct {
 	Name      string `yaml:"name"`
 	DoneID    string `yaml:"done_id"`
 	BacklogID string `yaml:"backlog_id"`
+	IssueType string `yaml:issue_type"`
 	ID        string `yaml:"id"`
 	Key       string `yaml:"key"`
 }

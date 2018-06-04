@@ -117,6 +117,8 @@ Possible flags include **"-f open"** for listing only open tasks, and
     | 1 |      | testing Todo tool  | 2018-04-22 20:10:13 |           | https://jira.company.com/browse/PRJ-001       |
     +---+------+--------------------+---------------------+-----------+-----------------------------------------------+
 
+Possible flags include **"-o"** for creating the task in offline mode (Does not create an issue in JIRA)
+
 #### Complete
 
     $ todo complete 1
@@ -137,6 +139,17 @@ Possible flags include **"-f open"** for listing only open tasks, and
     | # | DONE |        TASK        |       CREATED       | COMPLETED |                      URL                      |
     +---+------+--------------------+---------------------+-----------+-----------------------------------------------+
     | 1 |      | testing Todo tool  | 2018-04-22 20:10:13 |           | https://jira.company.com/browse/PRJ-001       |
+    +---+------+--------------------+---------------------+-----------+-----------------------------------------------+
+
+#### Toggle
+
+    $ todo toggle 1
+    $ Taking task: 'Testing todo tool offline'
+    $ todo list
+    +---+------+--------------------+---------------------+-----------+-----------------------------------------------+
+    | # | DONE |        TASK        |       CREATED       | COMPLETED |                      URL                      |
+    +---+------+--------------------+---------------------+-----------+-----------------------------------------------+
+    | 1 |      | testing Todo tool  | 2018-04-22 20:10:13 |           |                                               |
     +---+------+--------------------+---------------------+-----------+-----------------------------------------------+
 
 #### Del

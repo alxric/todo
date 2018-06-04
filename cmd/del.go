@@ -28,7 +28,7 @@ var delCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Short: "Deletes the task with the index supplied from your todo list",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return del(args)
+		return t.Del(args)
 	},
 }
 
@@ -36,20 +36,23 @@ func init() {
 	rootCmd.AddCommand(delCmd)
 }
 
-func del(args []string) error {
+// Del will remove a task
+func (t *Todo) Del(args []string) error {
 	var i int
 	var err error
-	if i, err = verifyIndex(args); err != nil {
+	if i, err = t.verifyIndex(args); err != nil {
 		return err
 	}
-	t := cfg.Tasks[i]
-	fmt.Printf("Deleting task: '%s'\n", t.Text)
-	err = j.DeleteIssue(t.JiraID)
-	if err != nil {
-		return fmt.Errorf("Unable to delete Jira issue: %v", err)
+	task := t.Config.Tasks[i]
+	fmt.Printf("Deleting task: '%s'\n", task.Text)
+	if task.JiraKey != "" {
+		err = t.JC.DeleteIssue(task.JiraID)
+		if err != nil {
+			return fmt.Errorf("Unable to delete Jira issue: %v", err)
+		}
 	}
-	cfg.Tasks = append(cfg.Tasks[:i-1], cfg.Tasks[i:]...)
-	config.Write(viper.ConfigFileUsed(), &cfg)
+	t.Config.Tasks = append(t.Config.Tasks[:i], t.Config.Tasks[i+1:]...)
+	config.Write(viper.ConfigFileUsed(), &t.Config)
 
 	return nil
 }

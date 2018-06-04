@@ -16,48 +16,56 @@ package cmd
 
 import (
 	"fmt"
-	"time"
+	"jira"
 	"todo/internal/config"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-// completeCmd represents the complete command
-var completeCmd = &cobra.Command{
-	Use:   "complete",
+// toggleCmd represents the toggle command
+var toggleCmd = &cobra.Command{
+	Use:   "toggle",
 	Args:  cobra.ExactArgs(1),
-	Short: "Completes the task with the index supplied",
+	Short: "Toggles the supplied task between offline/online",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return t.Complete(args)
+		return t.Toggle(args)
 	},
 }
 
 func init() {
-	rootCmd.AddCommand(completeCmd)
-
+	rootCmd.AddCommand(toggleCmd)
 }
 
-// Complete a task
-func (t *Todo) Complete(args []string) error {
+// Toggle a task online/offline
+func (t *Todo) Toggle(args []string) error {
 	var i int
 	var err error
 	if i, err = t.verifyIndex(args); err != nil {
 		return err
 	}
 	task := t.Config.Tasks[i]
-	if task.Done == true {
-		return fmt.Errorf("Task '%s' is already completed", task.Text)
-	}
-	fmt.Printf("Completing task: '%s'\n", task.Text)
-	if task.JiraID != "" {
-		err = t.JC.ChangeIssueStatus(task.JiraID, t.Config.Jira.Project.DoneID, "Closed by Todo")
-		if err != nil {
-			return fmt.Errorf("Unable to change Jira status: %v", err)
+	switch task.JiraID {
+	case "":
+		fmt.Printf("Creating Jira issue for '%s'\n", task.Text)
+		issue := &jira.Issue{
+			Fields: jira.Fields{
+				Summary: fmt.Sprintf("TODO: %s", task.Text),
+				Project: jira.IssueProject{
+					ID: t.Config.Jira.Project.ID,
+				},
+				IssueType: jira.IssueType{
+					ID: t.Config.Jira.Project.IssueType,
+				},
+			},
 		}
+		t.createJira(issue, task)
+	default:
+		fmt.Printf("Taking todo '%s' offline\n", task.Text)
+		task.JiraID = ""
+		task.JiraKey = ""
 	}
-	task.Done = true
-	task.Completed = time.Now()
 	config.Write(viper.ConfigFileUsed(), &t.Config)
+
 	return nil
 }
